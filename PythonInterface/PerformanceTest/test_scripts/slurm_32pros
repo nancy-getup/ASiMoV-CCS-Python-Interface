@@ -1,0 +1,65 @@
+#!/bin/bash
+#SBATCH --job-name=python_tgv2d_f2py_module
+#SBATCH --nodes=1
+#SBATCH --tasks-per-node=36
+#SBATCH --cpus-per-task=1          
+#  assume the time before submit the job 
+#SBATCH --time=05:10:00               
+
+#SBATCH --account=m23oc-s2504787
+#SBATCH --partition=standard
+#SBATCH --qos=standard
+# SBATCH --exclusive
+
+module load openmpi 
+module load python 
+
+# load the environment for the project. The path should be changed to the correct path based on the project
+source /work/m23oc/m23oc/s2517842/Dissertation/libs/install/setup_gnu_env.sh
+
+# number of tasks
+SLURM_NTASKS=32
+
+# log files
+summary_file="summary_output_32.out"
+# clean the error log
+> $summary_file
+
+# loop over different `dt` values with different `cps` and `num_steps`
+echo "=================== Strating ===================" >> $summary_file
+echo "=================== Strating ==================="
+for dt in 0.005 0.01 0.015 0.02 0.025
+do
+  for cps in 400 800 1600
+  do
+        # calculate the number of steps based on the `dt`
+        num_steps=$(echo "0.5 / $dt" | bc)
+        echo "==========Running with dt=${dt}, cps=${cps}, num_steps=${num_steps}==========" >> $summary_file
+        echo "==========Running with dt=${dt}, cps=${cps}, num_steps=${num_steps}=========="
+        # run the script 5 times to get the average data to make the result more reliable
+        for i in {1..5}
+        do
+          echo "===================Time ${i}==================="  >> $summary_file
+          echo "===================Time ${i}==================="
+          # get the output from the output of the script
+          output=$(mpirun -np $SLURM_NTASKS python python_tgv_script.py --cps $cps --dt $dt --num_steps $num_steps)
+          # get the init time, elapsed time, L2 error, and Linf error from the output
+          init_time=$(echo "$output" | grep "Init time")
+          elapsed_time=$(echo "$output" | grep "Elapsed time")
+          error_L2=$(echo "$output" | grep "L2 Error")
+          error_Linf=$(echo "$output" | grep "Linf Error")
+          # write the error details, error summary, and time summary to the summary file
+          echo "-----Error Detail-----" >> $summary_file
+          cat tgv2d-err.log >> $summary_file
+          echo "-----Error Summary-----" >> $summary_file
+          echo $error_L2 >> $summary_file
+          echo $error_Linf >> $summary_file
+          echo "-----Time Summary-----" >> $summary_file
+          echo $init_time >> $summary_file
+          echo $elapsed_time >> $summary_file
+        done
+    done
+done
+
+echo "===================Finished===================" >> $summary_file
+echo "===================Finished==================="
